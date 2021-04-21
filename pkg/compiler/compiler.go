@@ -725,11 +725,13 @@ func genImageList(refs []string, hash string) []string {
 }
 
 func (cs *LuetCompiler) inheritSpecBuildOptions(p *compilerspec.LuetCompilationSpec) {
-	if len(p.BuildOptions.PullImageRepository) != 0 {
-		cs.Options.PullImageRepository = append(cs.Options.PullImageRepository, p.BuildOptions.PullImageRepository...)
-	}
 	if len(p.BuildOptions.PushImageRepository) != 0 {
 		cs.Options.PullImageRepository = append(cs.Options.PullImageRepository, p.BuildOptions.PushImageRepository)
+		Debug("Inheriting push repository from buildoptions", cs.Options.PushImageRepository)
+	}
+	if len(p.BuildOptions.PullImageRepository) != 0 {
+		cs.Options.PullImageRepository = append(cs.Options.PullImageRepository, p.BuildOptions.PullImageRepository...)
+		Debug("Inheriting pull repository from buildoptions", cs.Options.PullImageRepository)
 	}
 }
 
@@ -965,7 +967,7 @@ func (cs *LuetCompiler) FromPackage(p pkg.Package) (*compilerspec.LuetCompilatio
 
 	opts := options.Compiler{}
 
-	artifactMetadataFile := filepath.Join(p.GetTreeDir(), "..", p.GetMetadataFilePath())
+	artifactMetadataFile := filepath.Join(pack.GetTreeDir(), "..", pack.GetMetadataFilePath())
 	Debug("Checking if metadata file is present", artifactMetadataFile)
 	if _, err := os.Stat(artifactMetadataFile); err == nil {
 		f, err := os.Open(artifactMetadataFile)
@@ -981,10 +983,8 @@ func (cs *LuetCompiler) FromPackage(p pkg.Package) (*compilerspec.LuetCompilatio
 			return nil, errors.Wrap(err, "could not decode package from yaml")
 		}
 
-		Debug("Read build options:", art.CompileSpec.BuildOptions)
+		Debug("Read build options:", art.CompileSpec.BuildOptions, "from", artifactMetadataFile)
 		opts = art.CompileSpec.BuildOptions
-		opts.PushImageRepository = ""
-
 	} else if !os.IsNotExist(err) {
 		Debug("error reading already existing artifact metadata file: ", err.Error())
 	} else if os.IsNotExist(err) {

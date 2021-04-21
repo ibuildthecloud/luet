@@ -3,8 +3,8 @@
 export LUET_NOLOCK=true
 
 oneTimeSetUp() {
-  export tmpdir="$(mktemp -d)"
-  docker images --filter='reference=luet/cache' --format='{{.Repository}}:{{.Tag}}' | xargs -r docker rmi
+    export tmpdir="$(mktemp -d)"
+    docker images --filter='reference=luet/cache' --format='{{.Repository}}:{{.Tag}}' | xargs -r docker rmi
 }
 
 oneTimeTearDown() {
@@ -38,11 +38,13 @@ EOF
 
 testBuild() {
     [ -z "${TEST_DOCKER_IMAGE:-}" ] && startSkipping
-
+    cat <<EOF > $tmpdir/default.yaml
+extra: "an"
+EOF
     mkdir $tmpdir/testbuild
     mkdir $tmpdir/empty
     build_output=$(luet build --pull --tree "$tmpdir/empty" \
-    --config $tmpdir/luet.yaml --concurrency 1 \
+    --config $tmpdir/luet.yaml --values $tmpdir/default.yaml --concurrency 1 \
     --from-repositories --destination $tmpdir/testbuild --compression zstd test/c@1.0 test/z test/interpolated)
     buildst=$?
     assertEquals 'builds successfully' "$buildst" "0"
@@ -106,7 +108,8 @@ testInstall() {
     assertEquals 'install test successfully' "$installst" "0"
     assertTrue 'package installed' "[ -e '$tmpdir/testrootfs/c' ]"
     assertTrue 'package Z installed' "[ -e '$tmpdir/testrootfs/z' ]"
-    assertTrue 'package interpolated installed' "[ -e '$tmpdir/testrootfs/interpolated-baz-bar' ]"
+    ls -liah $tmpdir/testrootfs/
+    assertTrue 'package interpolated installed' "[ -e '$tmpdir/testrootfs/interpolated-baz-an' ]"
 }
 
 testReInstall() {
