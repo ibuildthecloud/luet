@@ -45,12 +45,13 @@ testBuild() {
     --config $tmpdir/luet.yaml --concurrency 1 \
     --from-repositories --destination $tmpdir/testbuild --compression zstd test/c@1.0 test/z test/interpolated)
     buildst=$?
+    echo "$build_output"
     assertEquals 'builds successfully' "$buildst" "0"
     assertTrue 'create package dep B' "[ -e '$tmpdir/testbuild/b-test-1.0.package.tar.zst' ]"
     assertTrue 'create package' "[ -e '$tmpdir/testbuild/c-test-1.0.package.tar.zst' ]"
     assertTrue 'create package Z' "[ -e '$tmpdir/testbuild/z-test-1.0+2.package.tar.zst' ]"
     assertTrue 'create package interpolated' "[ -e '$tmpdir/testbuild/interpolated-test-1.0+2.package.tar.zst' ]"
-    assertContains 'Does use the upstream cache without specifying it' "$build_output" "Generating 'builder' image from quay.io/mocaccinoos/integration-test-cache:79d7107d13d578b362e6a7bf10ec850efce26316405b8d732ce8f9e004d64281 as luet/cache:builder-09e1e5824824b770c9dec10b4d846132"
+    assertContains 'Does use the upstream cache without specifying it' "$build_output" "Downloaded image: quay.io/mocaccinoos/integration-test-cache:6490e800fe443b99328fc363529aee74bda513930fb27ce6ab814d692bba068e"
 }
 
 testRepo() {

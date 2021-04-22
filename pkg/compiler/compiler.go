@@ -518,10 +518,10 @@ func oneOfImagesAvailable(images []string, b CompilerBackend) (bool, string) {
 	return false, ""
 }
 
-func (cs *LuetCompiler) resolveExistingImageHash(imageHash string) string {
+func (cs *LuetCompiler) resolveExistingImageHash(imageHash string, p *compilerspec.LuetCompilationSpec) string {
 	var resolvedImage string
 	toChecklist := append([]string{fmt.Sprintf("%s:%s", cs.Options.PushImageRepository, imageHash)},
-		genImageList(cs.Options.PullImageRepository, imageHash)...)
+		genImageList(p.BuildOptions.PullImageRepository, imageHash)...)
 	if exists, which := oneOfImagesExists(toChecklist, cs.Backend); exists {
 		resolvedImage = which
 	}
@@ -557,7 +557,7 @@ func (cs *LuetCompiler) getImageArtifact(hash string, p *compilerspec.LuetCompil
 	// we return a full artifact if can be loaded locally.
 
 	toChecklist := append([]string{fmt.Sprintf("%s:%s", cs.Options.PushImageRepository, hash)},
-		genImageList(cs.Options.PullImageRepository, hash)...)
+		genImageList(p.BuildOptions.PullImageRepository, hash)...)
 
 	exists, _ := oneOfImagesExists(toChecklist, cs.Backend)
 	if art, err := LoadArtifactFromYaml(p); err == nil && exists { // If YAML is correctly loaded, and both images exists, no reason to rebuild.
@@ -725,22 +725,28 @@ func genImageList(refs []string, hash string) []string {
 }
 
 func (cs *LuetCompiler) inheritSpecBuildOptions(p *compilerspec.LuetCompilationSpec) {
+	Debug("Build options before inherit", p.BuildOptions)
+
+	// Append push repositories from buildpsec buildoptions as pull if found.
+	// This allows to resolve the hash automatically if we pulled the metadata from
+	// repositories that are advertizing their cache.
 	if len(p.BuildOptions.PushImageRepository) != 0 {
-		cs.Options.PullImageRepository = append(cs.Options.PullImageRepository, p.BuildOptions.PushImageRepository)
-		Debug("Inheriting push repository from buildoptions", cs.Options.PushImageRepository)
+		p.BuildOptions.PullImageRepository = append(p.BuildOptions.PullImageRepository, p.BuildOptions.PushImageRepository)
+		Debug("Inheriting pull repository from PushImageRepository buildoptions", p.BuildOptions.PullImageRepository)
 	}
-	if len(p.BuildOptions.PullImageRepository) != 0 {
-		cs.Options.PullImageRepository = append(cs.Options.PullImageRepository, p.BuildOptions.PullImageRepository...)
-		Debug("Inheriting pull repository from buildoptions", cs.Options.PullImageRepository)
+
+	if len(cs.Options.PullImageRepository) != 0 {
+		p.BuildOptions.PullImageRepository = append(p.BuildOptions.PullImageRepository, cs.Options.PullImageRepository...)
+		Debug("Inheriting pull repository from PullImageRepository buildoptions", p.BuildOptions.PullImageRepository)
 	}
+	Debug("Build options after inherit", p.BuildOptions)
 }
 
 func (cs *LuetCompiler) compile(concurrency int, keepPermissions bool, p *compilerspec.LuetCompilationSpec) (*artifact.PackageArtifact, error) {
-
+	// TODO: Racy, remove it
 	// Inherit build options from compilation specs metadata
-	orig := cs.Options.PullImageRepository
-	defer func() { cs.Options.PullImageRepository = orig }()
-	cs.inheritSpecBuildOptions(p)
+	// orig := cs.Options.PullImageRepository
+	// defer func() { cs.Options.PullImageRepository = orig }()
 
 	Info(":package: Compiling", p.GetPackage().HumanReadableString(), ".... :coffee:")
 
@@ -815,7 +821,7 @@ func (cs *LuetCompiler) compile(concurrency int, keepPermissions bool, p *compil
 			// for the source instead, pick an image and a buildertaggedImage from hashes if they exists.
 			// otherways fallback to the pushed repo
 			// Resolve images from the hashtree
-			resolvedBuildImage := cs.resolveExistingImageHash(assertion.Hash.BuildHash)
+			resolvedBuildImage := cs.resolveExistingImageHash(assertion.Hash.BuildHash, compileSpec)
 			if compileSpec.GetImage() != "" {
 				Debug(pkgTag, " :wrench: Compiling "+compileSpec.GetPackage().HumanReadableString()+" from image")
 
@@ -851,7 +857,7 @@ func (cs *LuetCompiler) compile(concurrency int, keepPermissions bool, p *compil
 	}
 
 	if !cs.Options.OnlyDeps {
-		resolvedBuildImage := cs.resolveExistingImageHash(lastHash)
+		resolvedBuildImage := cs.resolveExistingImageHash(lastHash, p)
 		Info(":rocket: All dependencies are satisfied, building package requested by the user", p.GetPackage().HumanReadableString())
 		Info(":package:", p.GetPackage().HumanReadableString(), " Using image: ", resolvedBuildImage)
 		a, err := cs.compileWithImage(resolvedBuildImage, "", targetAssertion.Hash.PackageHash, concurrency, keepPermissions, cs.Options.KeepImg, p, true)
@@ -984,9 +990,9 @@ func (cs *LuetCompiler) FromPackage(p pkg.Package) (*compilerspec.LuetCompilatio
 		}
 
 		Debug("Read build options:", art.CompileSpec.BuildOptions, "from", artifactMetadataFile)
-		opts = art.CompileSpec.BuildOptions
+		opts = *art.CompileSpec.BuildOptions
 	} else if !os.IsNotExist(err) {
-		Debug("error reading already existing artifact metadata file: ", err.Error())
+		Debug("error reading artifact metadata file: ", err.Error())
 	} else if os.IsNotExist(err) {
 		Debug("metadata file not present, skipping", artifactMetadataFile)
 	}
@@ -1000,7 +1006,9 @@ func (cs *LuetCompiler) FromPackage(p pkg.Package) (*compilerspec.LuetCompilatio
 	if err != nil {
 		return nil, err
 	}
-	newSpec.BuildOptions = opts
+	newSpec.BuildOptions = &opts
+
+	cs.inheritSpecBuildOptions(newSpec)
 
 	return newSpec, err
 }

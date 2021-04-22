@@ -51,6 +51,7 @@ require (
 	github.com/spf13/cobra v1.1.1
 	github.com/spf13/viper v1.7.1
 	github.com/theupdateframework/notary v0.7.0
+	github.com/thoas/go-funk v0.8.0 // indirect
 	go.etcd.io/bbolt v1.3.5
 	go.uber.org/atomic v1.5.1 // indirect
 	go.uber.org/multierr v1.4.0
