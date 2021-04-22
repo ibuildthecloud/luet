@@ -698,6 +698,7 @@ func (cs *LuetCompiler) ComputeDepTree(p *compilerspec.LuetCompilationSpec) (sol
 				BuildHash:   nthsolution.HashFrom(assertion.Package),
 				PackageHash: nthsolution.AssertionHash(),
 			}
+			assertion.Package.SetTreeDir(p.Package.GetTreeDir())
 			assertions = append(assertions, assertion)
 		}
 	}
@@ -710,7 +711,7 @@ func (cs *LuetCompiler) ComputeDepTree(p *compilerspec.LuetCompilationSpec) (sol
 func (cs *LuetCompiler) Compile(keepPermissions bool, p *compilerspec.LuetCompilationSpec) (*artifact.PackageArtifact, error) {
 	asserts, err := cs.ComputeDepTree(p)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	p.SetSourceAssertion(asserts)
 	return cs.compile(cs.Options.Concurrency, keepPermissions, p)
@@ -770,7 +771,8 @@ func (cs *LuetCompiler) compile(concurrency int, keepPermissions bool, p *compil
 	})
 
 	// Update compilespec build options - it will be then serialized into the compilation metadata file
-	p.SetBuildOptions(cs.Options)
+	//p.SetBuildOptions(cs.Options)
+	cs.inheritSpecBuildOptions(p)
 
 	// - If image is set we just generate a plain dockerfile
 	// Treat last case (easier) first. The image is provided and we just compute a plain dockerfile with the images listed as above
@@ -790,7 +792,10 @@ func (cs *LuetCompiler) compile(concurrency int, keepPermissions bool, p *compil
 	currentN := 0
 
 	packageDeps := !cs.Options.PackageTargetOnly
-	if !cs.Options.NoDeps {
+	buildDeps := !cs.Options.NoDeps
+	buildTarget := !cs.Options.OnlyDeps
+
+	if buildDeps {
 		Info(":deciduous_tree: Build dependencies for " + p.GetPackage().HumanReadableString())
 		for _, assertion := range dependencies { //highly dependent on the order
 			depsN++
@@ -805,6 +810,9 @@ func (cs *LuetCompiler) compile(concurrency int, keepPermissions bool, p *compil
 			if err != nil {
 				return nil, errors.Wrap(err, "Error while generating compilespec for "+assertion.Package.GetName())
 			}
+			compileSpec.BuildOptions.PullImageRepository = append(compileSpec.BuildOptions.PullImageRepository, p.BuildOptions.PullImageRepository...)
+			Debug("PullImage repos:", compileSpec.BuildOptions.PullImageRepository)
+
 			compileSpec.SetOutputPath(p.GetOutputPath())
 			Debug(pkgTag, "    :arrow_right_hook: :whale: Builder image from hash", assertion.Hash.BuildHash)
 			Debug(pkgTag, "    :arrow_right_hook: :whale: Package image from hash", assertion.Hash.PackageHash)
@@ -856,7 +864,7 @@ func (cs *LuetCompiler) compile(concurrency int, keepPermissions bool, p *compil
 		lastHash = dependencies[len(dependencies)-1].Hash.PackageHash
 	}
 
-	if !cs.Options.OnlyDeps {
+	if buildTarget {
 		resolvedBuildImage := cs.resolveExistingImageHash(lastHash, p)
 		Info(":rocket: All dependencies are satisfied, building package requested by the user", p.GetPackage().HumanReadableString())
 		Info(":package:", p.GetPackage().HumanReadableString(), " Using image: ", resolvedBuildImage)
