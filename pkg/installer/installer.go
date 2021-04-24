@@ -197,8 +197,16 @@ func (l *LuetInstaller) Swap(toRemove pkg.Packages, toInstall pkg.Packages, s *S
 			toRemoveFinal = append(toRemoveFinal, pp)
 		}
 	}
+	o := Option{
+		FullUninstall:      false,
+		Force:              true,
+		CheckConflicts:     false,
+		FullCleanUninstall: false,
+		NoDeps:             l.Options.NoDeps,
+		OnlyDeps:           false,
+	}
 
-	return l.swap(syncedRepos, toRemoveFinal, toInstall, s)
+	return l.swap(o, syncedRepos, toRemoveFinal, toInstall, s)
 }
 
 func (l *LuetInstaller) computeSwap(o Option, syncedRepos Repositories, toRemove pkg.Packages, toInstall pkg.Packages, s *System) (map[string]ArtifactMatch, pkg.Packages, solver.PackagesAssertions, pkg.PackageDatabase, error) {
@@ -235,7 +243,7 @@ func (l *LuetInstaller) computeSwap(o Option, syncedRepos Repositories, toRemove
 	return match, packages, assertions, allRepos, err
 }
 
-func (l *LuetInstaller) swap(syncedRepos Repositories, toRemove pkg.Packages, toInstall pkg.Packages, s *System) error {
+func (l *LuetInstaller) swap(o Option, syncedRepos Repositories, toRemove pkg.Packages, toInstall pkg.Packages, s *System) error {
 	//forced := l.Options.Force
 	//	nodeps := l.Options.NoDeps
 
@@ -247,14 +255,6 @@ func (l *LuetInstaller) swap(syncedRepos Repositories, toRemove pkg.Packages, to
 	// now the solver enforces the constraints and explictly denies two packages
 	// of the same version installed.
 	//l.Options.Force = true
-
-	o := Option{
-		FullUninstall:      false,
-		Force:              true,
-		CheckConflicts:     false,
-		FullCleanUninstall: false,
-		NoDeps:             true,
-	}
 
 	match, packages, assertions, allRepos, err := l.computeSwap(o, syncedRepos, toRemove, toInstall, s)
 	if err != nil {
@@ -289,8 +289,8 @@ func (l *LuetInstaller) swap(syncedRepos Repositories, toRemove pkg.Packages, to
 	// TODO: Replace with installerWorkOpts down here
 
 	ops := l.getOpsWithOptions(toRemove, match, Option{
-		Force:         l.Options.Force,
-		NoDeps:        l.Options.NoDeps,
+		Force:         o.Force,
+		NoDeps:        false,
 		OnlyDeps:      o.OnlyDeps,
 		RunFinalizers: false,
 	}, o, syncedRepos, packages, assertions, allRepos)
@@ -376,7 +376,8 @@ func (l *LuetInstaller) runOps(ops []installerOp, s *System) error {
 	return nil
 }
 
-// TODO: Finish implementation here,
+// TODO: use installerOpWorker in place of all the other workers.
+// This one is general enough to read a list of operations and execute them.
 func (l *LuetInstaller) installerOpWorker(i int, wg *sync.WaitGroup, c <-chan installerOp, s *System) error {
 	defer wg.Done()
 
@@ -494,17 +495,26 @@ func (l *LuetInstaller) checkAndUpgrade(r Repositories, s *System) error {
 		return nil
 	}
 
+	o := Option{
+		FullUninstall:      false,
+		Force:              true,
+		CheckConflicts:     false,
+		FullCleanUninstall: false,
+		NoDeps:             true,
+		OnlyDeps:           false,
+	}
+
 	if l.Options.Ask {
 		Info("By going forward, you are also accepting the licenses of the packages that you are going to install in your system.")
 		if Ask() {
 			l.Options.Ask = false // Don't prompt anymore
-			return l.swap(r, uninstall, toInstall, s)
+			return l.swap(o, r, uninstall, toInstall, s)
 		} else {
 			return errors.New("Aborted by user")
 		}
 	}
 
-	return l.swap(r, uninstall, toInstall, s)
+	return l.swap(o, r, uninstall, toInstall, s)
 }
 
 func (l *LuetInstaller) Install(cp pkg.Packages, s *System) error {
@@ -895,7 +905,7 @@ func checkAndPrunePath(path string) {
 
 	fi, err := os.Lstat(targetPath)
 	if err != nil {
-		Warning("Dir not found (it was before?) ", err.Error())
+		//	Warning("Dir not found (it was before?) ", err.Error())
 		return
 	}
 
