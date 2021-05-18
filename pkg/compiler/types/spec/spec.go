@@ -227,8 +227,41 @@ func (cs *LuetCompilationSpec) HasImageSource() bool {
 	return (cs.Package != nil && len(cs.GetPackage().GetRequires()) != 0) || cs.GetImage() != ""
 }
 
+// Signature is a portion of the spec that yields a signature for the hash
+type Signature struct {
+	Image      string
+	Steps      []string
+	PackageDir string
+	Prelude    []string
+	Seed       string
+	Env        []string
+	Retrieve   []string
+	Unpack     bool
+	Includes   []string
+	Excludes   []string
+	Copy       []CopyField
+}
+
+func (cs *LuetCompilationSpec) signature() Signature {
+	return Signature{
+		Image:      cs.Image,
+		Steps:      cs.Steps,
+		PackageDir: cs.PackageDir,
+		Prelude:    cs.Prelude,
+		Seed:       cs.Seed,
+		Env:        cs.Env,
+		Retrieve:   cs.Retrieve,
+		Unpack:     cs.Unpack,
+		Includes:   cs.Includes,
+		Excludes:   cs.Excludes,
+		Copy:       cs.Copy,
+	}
+}
+
 func (cs *LuetCompilationSpec) Hash() (string, error) {
-	h, err := hashstructure.Hash(cs, hashstructure.FormatV2, nil)
+	// build a signature, we want to be part of the hash only the fields that are relevant for build purposes
+	signature := cs.signature()
+	h, err := hashstructure.Hash(signature, hashstructure.FormatV2, nil)
 	return fmt.Sprint(h), err
 }
 
