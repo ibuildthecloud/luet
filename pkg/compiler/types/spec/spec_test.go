@@ -103,8 +103,8 @@ var _ = Describe("Spec", func() {
 				},
 			}
 			spec3 := &compilerspec.LuetCompilationSpec{
-				Image:        "foo",
-				BuildOptions: &options.Compiler{BuildValues: []map[string]interface{}{{"baz": true}}},
+				Image: "foo",
+				Steps: []string{"foo"},
 				Package: &pkg.DefaultPackage{
 					Name:     "foo",
 					Category: "Bar",
