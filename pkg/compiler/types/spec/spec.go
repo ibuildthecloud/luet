@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"path/filepath"
 
+	"github.com/mitchellh/hashstructure/v2"
 	options "github.com/mudler/luet/pkg/compiler/types/options"
 
 	pkg "github.com/mudler/luet/pkg/package"
@@ -224,6 +225,11 @@ func (cs *LuetCompilationSpec) UnpackedPackage() bool {
 // explictly supplied
 func (cs *LuetCompilationSpec) HasImageSource() bool {
 	return (cs.Package != nil && len(cs.GetPackage().GetRequires()) != 0) || cs.GetImage() != ""
+}
+
+func (cs *LuetCompilationSpec) Hash() (string, error) {
+	h, err := hashstructure.Hash(cs, hashstructure.FormatV2, nil)
+	return fmt.Sprint(h), err
 }
 
 func (cs *LuetCompilationSpec) CopyRetrieves(dest string) error {

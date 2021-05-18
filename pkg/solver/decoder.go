@@ -273,6 +273,11 @@ func (assertions PackagesAssertions) SaltedHashFrom(p pkg.Package, salts map[str
 	// When we don't have any solution to hash for, we need to generate an UUID by ourselves
 	latestsolution := assertions.Drop(p)
 	if latestsolution.TrueLen() == 0 {
+		// Preserve the hash if supplied of marked packages
+		marked := p.Mark()
+		if markedHash, exists := salts[p.GetFingerPrint()]; exists {
+			salts[marked.GetFingerPrint()] = markedHash
+		}
 		assertionhash = assertions.Mark(p).SaltedAssertionHash(salts)
 	} else {
 		assertionhash = latestsolution.SaltedAssertionHash(salts)
@@ -329,8 +334,7 @@ func (assertions PackagesAssertions) Mark(p pkg.Package) PackagesAssertions {
 
 	for _, a := range assertions {
 		if a.Package.Matches(p) {
-			marked := a.Package.Clone()
-			marked.SetName("@@" + marked.GetName())
+			marked := a.Package.Mark()
 			a = PackageAssert{Package: marked.(*pkg.DefaultPackage), Value: a.Value, Hash: a.Hash}
 		}
 		ass = append(ass, a)
