@@ -52,6 +52,8 @@ var _ = Describe("ImageHashTree", func() {
 		})
 	})
 
+	expectedPackageHash := "c46e653125d71ee3fd696b3941ec1ed6e8a0268f896204c7a222a5aa03eb9982"
+
 	Context("complex package definition", func() {
 		BeforeEach(func() {
 			generalRecipe = tree.NewCompilerRecipe(pkg.NewInMemoryDatabase(false))
@@ -69,8 +71,52 @@ var _ = Describe("ImageHashTree", func() {
 			packageHash, err := hashtree.Query(compiler, spec)
 			Expect(err).ToNot(HaveOccurred())
 
+			Expect(packageHash.Dependencies[len(packageHash.Dependencies)-1].Hash.PackageHash).To(Equal(expectedPackageHash))
+			Expect(packageHash.SourceHash).To(Equal(expectedPackageHash))
+			Expect(packageHash.BuilderImageHash).To(Equal("builder-37f4d05ba8a39525742ca364f69b4090"))
+
+			//Expect(packageHash.Target.Hash.BuildHash).To(Equal("79d7107d13d578b362e6a7bf10ec850efce26316405b8d732ce8f9e004d64281"))
+			Expect(packageHash.Target.Hash.PackageHash).To(Equal("bb1d9a99c0c309a297c75b436504e664a42121fadbb4e035bda403cd418117aa"))
+			a := &pkg.DefaultPackage{Name: "a", Category: "test", Version: "1.1"}
+			hash, err := packageHash.DependencyBuildImage(a)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(hash).To(Equal("79d7107d13d578b362e6a7bf10ec850efce26316405b8d732ce8f9e004d64281"))
+
+			assertionA := packageHash.Dependencies.Search(a.GetFingerPrint())
+			Expect(assertionA.Hash.PackageHash).To(Equal(expectedPackageHash))
+			b := &pkg.DefaultPackage{Name: "b", Category: "test", Version: "1.0"}
+			assertionB := packageHash.Dependencies.Search(b.GetFingerPrint())
+			Expect(assertionB.Hash.PackageHash).To(Equal("79d7107d13d578b362e6a7bf10ec850efce26316405b8d732ce8f9e004d64281"))
+			hashB, err := packageHash.DependencyBuildImage(b)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(hashB).To(Equal("6490e800fe443b99328fc363529aee74bda513930fb27ce6ab814d692bba068e"))
+		})
+	})
+
+	Context("complex package definition, with small change in build.yaml", func() {
+		BeforeEach(func() {
+			generalRecipe = tree.NewCompilerRecipe(pkg.NewInMemoryDatabase(false))
+
+			//Definition of A here is slightly changed in the steps build.yaml file (1 character only)
+			err := generalRecipe.Load("../../tests/fixtures/upgrade_old_repo_revision_content_changed")
+			Expect(err).ToNot(HaveOccurred())
+			compiler = NewLuetCompiler(sd.NewSimpleDockerBackend(), generalRecipe.GetDatabase(), options.Concurrency(2))
+			hashtree = NewHashTree(generalRecipe.GetDatabase())
+
+		})
+		It("Calculates the hash correctly", func() {
+			spec, err := compiler.FromPackage(&pkg.DefaultPackage{Name: "c", Category: "test", Version: "1.0"})
+			Expect(err).ToNot(HaveOccurred())
+
+			packageHash, err := hashtree.Query(compiler, spec)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(packageHash.Dependencies[len(packageHash.Dependencies)-1].Hash.PackageHash).ToNot(Equal(expectedPackageHash))
+
 			Expect(packageHash.Dependencies[len(packageHash.Dependencies)-1].Hash.PackageHash).To(Equal("c46e653125d71ee3fd696b3941ec1ed6e8a0268f896204c7a222a5aa03eb9982"))
 			Expect(packageHash.SourceHash).To(Equal("c46e653125d71ee3fd696b3941ec1ed6e8a0268f896204c7a222a5aa03eb9982"))
+			Expect(packageHash.SourceHash).ToNot(Equal(expectedPackageHash))
+
 			Expect(packageHash.BuilderImageHash).To(Equal("builder-37f4d05ba8a39525742ca364f69b4090"))
 
 			//Expect(packageHash.Target.Hash.BuildHash).To(Equal("79d7107d13d578b362e6a7bf10ec850efce26316405b8d732ce8f9e004d64281"))
@@ -82,6 +128,8 @@ var _ = Describe("ImageHashTree", func() {
 
 			assertionA := packageHash.Dependencies.Search(a.GetFingerPrint())
 			Expect(assertionA.Hash.PackageHash).To(Equal("c46e653125d71ee3fd696b3941ec1ed6e8a0268f896204c7a222a5aa03eb9982"))
+			Expect(assertionA.Hash.PackageHash).ToNot(Equal(expectedPackageHash))
+
 			b := &pkg.DefaultPackage{Name: "b", Category: "test", Version: "1.0"}
 			assertionB := packageHash.Dependencies.Search(b.GetFingerPrint())
 			Expect(assertionB.Hash.PackageHash).To(Equal("79d7107d13d578b362e6a7bf10ec850efce26316405b8d732ce8f9e004d64281"))
